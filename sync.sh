@@ -18,3 +18,4 @@ repo sync -d -c -j4 2>&1 | tee sync.log
 #rename;find . -name "*he*" -exec rename 's/he/yang/' {} \;
 #setupenv;/usr/local/bin/change_to_v7.sh
 #searchcmd;cat ~/project/script/sync.sh | sed 's/#//'|grep change
+#repo sync -n -j8 -cq;repo sync-server -l -j32
