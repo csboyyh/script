@@ -12,8 +12,8 @@ short=$2
 long=$1
 if [[ $tc1 -lt $tc2 ]];then
     count=$tc2
-    short= $1
-    long= $2
+    short=$1
+    long=$2
 fi
 
 ctyp2=`echo $long | awk -F "[-_]" '{print $1}'`
@@ -78,7 +78,7 @@ do
             for name in `find $TEMP_2/$dir -type d -name "*$token2*"`
             do
                 if [[ $token1 = "" ]];then
-                    new_name=`basename $name| sed "s/$token2[-_]//g"`
+                    new_name=`basename $name| sed "s/[-_]$token2//g"`
                 else
                     new_name=`basename $name| sed "s/$token2/$token1/g"`
                 fi
@@ -87,7 +87,7 @@ do
             for name in `find $TEMP_2/$dir -type f -name "*$token2*"`
             do
                 if [[ $token1 = "" ]];then
-                    new_name=`basename $name| sed "s/$token2[-_]//g"`
+                    new_name=`basename $name| sed "s/[-_]$token2//g"`
                 else
                     new_name=`basename $name| sed "s/$token2/$token1/g"`
                 fi
@@ -98,11 +98,12 @@ do
                 echo -e "\tModifing:$file"
                 t_u1=`echo $token1 | tr 'a-z' 'A-Z'`
                 t_u2=`echo $token2 | tr 'a-z' 'A-Z'`
-                sed -ri "/$ctyp2|$ctyp2_u/{s/$token2/$token1/g}" $file
-                sed -ri "/$ctyp2|$ctyp2_u/{s/$t_u2/$t_u1/g}" $file
                 if [[ $token1 = "" ]];then
-                    sed -ri "/$ctyp2|$ctyp2_u/{s/$token2[-_]//g}" $file
-                    sed -ri "/$ctyp2|$ctyp2_u/{s/$t_u2[-_]//g}" $file
+                    sed -ri "/$ctyp2|$ctyp2_u/{s/\S$token2//g}" $file
+                    sed -ri "/$ctyp2|$ctyp2_u/{s/\S$t_u2//g}" $file
+                else
+                    sed -ri "/$ctyp2|$ctyp2_u/{s/$token2/$token1/g}" $file
+                    sed -ri "/$ctyp2|$ctyp2_u/{s/$t_u2/$t_u1/g}" $file
                 fi
             done
         fi
