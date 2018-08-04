@@ -19,3 +19,7 @@ repo sync -d -c -j4 2>&1 | tee sync.log
 #setupenv;/usr/local/bin/change_to_v7.sh
 #searchcmd;cat ~/project/script/sync.sh | sed 's/#//'|grep change
 #repo sync -n -j8 -cq;repo sync-server -l -j32
+#sed '/^#/s/$/tail/g' routine.sh
+#while true;do cat /proc/kmsg>>/data/kernel.log;done
+#find ./ -regextype posix-extended -regex ".*\.(log|txt)"
+#"a,b,c,d" |sed 's/,/\n/g'|sed '2N;s/\n//'

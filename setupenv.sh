@@ -1,22 +1,25 @@
 #!/bin/sh
 
+function show_file
+{
+    git show HEAD --name-status |awk '/[AMD]\s/{print $1,$2}'
+}
 function sh_sync
 {
     dest_dir=~/project/$1
     if [ -d $1 ];then
-        repo sync -n -j8 -cq;repo sync-server -l -j32 $1
+        repo sync -J32 -d -c $1
     else
         mkdir -p $dest_dir
         cd $dest_dir
         repo init -u gitadmin@gitmirror.spreadtrum.com:android/platform/manifest.git -b $1
-        repo sync -n -j8 -cq;repo sync-server -l -j32
-        if [ $# -gt 2 ];then
-            sh_tags $dest_dir
-        fi
+        repo sync -J32 -d -c
+        sh_tags $dest_dir
     fi
 }
 function sh_tags
 {
+    cd $1
     srcdir=`ls`
 
     find $srcdir -name "*.h" -o -name "*.c" -o -name "*.h" -o -name "*.s" -o -name "*.cpp" -o -name "*.java"  -prune >cscope.files
@@ -30,7 +33,8 @@ function sh_tags
 }
 function sh_push
 {
-    if [ -d ".git" ];then
+    git log >/dev/null
+    if [ $? -eq 0 ];then
         branch=`repo info . | awk '/revision/{print $3}'`
         repo_name=`repo info . | awk '/Project/{print $2}'`
         who=`git config --get user.name`
@@ -83,4 +87,8 @@ function sh_cmd
     case $1 in
 
     esac
+}
+function sh_cvt
+{
+    echo $1 | sed "s:\\/:\#:g"
 }
