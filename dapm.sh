@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DEBUG="true"
+DEBUG="false"
 
 temp_dir=dapm
 widget_db=$temp_dir/widget.txt
@@ -43,8 +43,9 @@ function help_and_prepare
         rm -rf $temp_dir
     fi
     mkdir $temp_dir
-    cp $1 $dapm_ctx
+    uniq $1 >$dapm_ctx
     dos2unix $dapm_ctx
+    touch $path_db
     path_count=0
     unset wpath
     idx=0
@@ -66,6 +67,7 @@ function format_dapm_context
 function build_dapm_struct
 {
     unset filename
+    unset stream
     while read line
     do
         array=(${line//:/ })
@@ -78,23 +80,41 @@ function build_dapm_struct
                 echo ${array[${#arry[@]}-1]}>>$temp_dir/$filename"_in"
                 ;;
             stream)
-                continue
+                stream="stream"
                 ;;
             *)
                 if [ -n $filename ];then
                     if [ ! -f $temp_dir/$filename"_out" -a ! -f $temp_dir/$filename"_in" ];then
                         sed "/^$filename$/s/$/:isolate/g" -i $widget_db
                     elif [ ! -f $temp_dir/$filename"_out" ];then
+                        endpoint=1
                         sed "/^$filename$/s/$/:sink/g" -i $widget_db
                     elif [ ! -f $temp_dir/$filename"_in" ];then
                         sed "/^$filename$/s/$/:source/g" -i $widget_db
+                        endpoint=1
                     else
                         sed "/^$filename$/s/$/:pipe/g" -i $widget_db
                     fi
                     sed "/^$filename:.*/s/$/:$state/g" -i $widget_db
+                    
+                    if [ $endpoint -eq 1 ];then
+                        if [ $stream = "stream" ];then
+                            sed "/^$filename:.*/s/$/:$stream/g" -i $widget_db
+                        elif [ $is_supply = "true" ];then
+                            sed "/^$filename:.*/s/$/:supply/g" -i $widget_db
+                        fi
+                    fi
                 fi
+                #Analog-Power: On  in 0 out 0
                 filename=${array[0]}
                 state=${array[1]}
+                if [ $state = "On" -a ${array[3]} -eq 0 -a ${array[5]} -eq 0 ];then
+                    is_supply="true"
+                else
+                    is_supply="false"
+                fi
+                stream="false"
+                endpoint=0
         esac
     done < $dapm_ctx
 }
@@ -117,6 +137,8 @@ function recrusive_dapm_path
     local dir=$2
     local state=$3 
     local w_state=$(grep "^$widget:.*" $widget_db |awk -F ":" '{print $3}')
+    local supply=""
+
 
     DEBUG echo "widget:"$widget" dir:"$dir" idx:"$idx
     
@@ -124,14 +146,17 @@ function recrusive_dapm_path
         state="Off"
     fi
 
+    if egrep "$widget.*supply" $widget_db -q;then
+        supply="Supply-path:"
+    fi
     wpath[$idx]=$widget"("$w_state")"
     if [ ! -e $temp_dir/$widget"_"$dir ];then
-        if [ $dir == "out" ];then
-            echo $path_count":"$state":"${wpath[@]}| tee -a $path_db
+        if [ $dir = "out" ];then
+            echo $supply$path_count":"$state":"${wpath[@]}>>$path_db
         else
             arg=$(echo ${wpath[*]})
             ret=($(reverse_array $arg))
-            echo $path_count":"$state":"${ret[*]}| tee -a $path_db
+            echo $supply$path_count":"$state":"${ret[*]}>>$path_db
         fi
         let path_count++
         unset wpath[$idx]
@@ -151,7 +176,6 @@ function recrusive_dapm_path
 function find_path_by_widget
 {
     local widget=`echo $1 | sed "s/ /-/g"`
-    echo "wid2:"$widget
     local string=$(grep $widget $widget_db)
     local array=(${string//:/ })
     local state="(On|Off)"
@@ -168,12 +192,12 @@ function find_path_by_widget
         echo "unknown widget:"$1
     fi
 
-    echo "find "$widget" from current path"
+    DEBUG echo "find "$widget" from current path"
     if egrep "^[0-9]+:(On|Off):$widget\($state\).*" $path_db $option ||   
         egrep "^[0-9]+:(On|Off):.*$widget\($state\)$" $path_db $option;then
         return
     else
-        echo "start to build path"
+        DEBUG echo "start to build path"
     fi
 
     case ${array[1]} in
@@ -192,7 +216,7 @@ function find_path_by_widget
         ;;
     esac
     
-    echo "find "$widget" from current path again"
+    DEBUG echo "find "$widget" from current path again"
     if egrep "^[0-9]+:(On|Off):$widget\($state\).*" $path_db $option ||   
         egrep "^[0-9]+:(On|Off):.*$widget\($state\)$" $path_db $option;then
         return
@@ -213,11 +237,14 @@ function show_active_paths
     grep ":On" $widget_db | while read line
     do
         local desr=(${line//:/ })
-        if [ ${desr[1]} = "source" ];then
-            find_path_by_widget ${desr[0]} "On" "quiet"
+        if [ ${#desr[@]} -ge 4 ];then
+            if [ ${desr[3]} != "supply" ];then
+                echo "start from:"${desr[0]}
+                find_path_by_widget ${desr[0]} "On" "quiet"
+            fi
         fi
     done
-    egrep "^[0-9]+:On:${desr[0]}.*" $path_db
+    egrep "^[0-9]+:On.*" $path_db
 }
 
 function find_path_by_source_sink

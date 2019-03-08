@@ -3,7 +3,7 @@
 
 srcdir=`ls`
 
-find $srcdir -name "*.h" -o -name "*.c" -o -name "*.cc" -o -name "*.s" -o -name "*.cpp" -o -name "*.java" -o -name "*.mk"  -prune >cscope.files
+find $srcdir -name "*.h" -o -name "*.c" -o -name "*.cc" -o -name "*.s" -o -name "*.cpp" -o -name "*.java" -o -name "*.mk" -o -name "*.dts" -o -name "*.dtsi"  -prune >cscope.files
 cscope -bkq -i cscope.files
 
 ctags -R --c++-kinds=+p --fields=+iaS --extra=+q -L cscope.files

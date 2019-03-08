@@ -1,8 +1,49 @@
 #!/bin/sh
 
-function show_file
+gurl="@review.source.unisoc.com"
+gq="gerrit query change:"
+patch_set="--patch-sets"
+hds="//10.0.1.110/hudson"
+domain="spreadtrum"
+repo_info="gitadmin@gitmirror.spreadtrum.com:android/platform/manifest.git"
+fetch_cmd="git fetch ssh://$who@review.source.unisoc.com:29418/"
+cherry_fetch="git cherry-pick FETCH_HEAD"
+who="he.yang"
+pswd="Yh87@sprdj" #password
+suser="$domain\\$who%$pswd"
+
+function show_filc
 {
     git show HEAD --name-status |awk '/[AMD]\s/{print $1,$2}'
+}
+function sh_get_gerrit_info
+{
+    eval `ssh -p 29418 "$who$gurl" "$gq$1 $patch_set" |sed 's/\s//g' | awk -F ":" '
+        BEGIN{branch="";project="";revision="";ref="";status="new"}
+        {
+            if($1=="branch")
+            {
+                branch=$2
+            }
+            if($1=="project")
+            {
+                project=$2
+            }
+            if($1=="revision")
+            {
+                revision=$2
+            }
+            if($1=="ref")        
+            {
+                ref=$2
+            }  
+            if($1=="status")
+            {
+                status=$2
+            }}
+        END{print "branch="branch";project="project";revision="revision";p_ref="ref";status="status}'`
+        echo "branch:"$branch
+
 }
 function sh_sync
 {
@@ -22,7 +63,7 @@ function sh_tags
     cd $1
     srcdir=`ls`
 
-    find $srcdir -name "*.h" -o -name "*.c" -o -name "*.h" -o -name "*.s" -o -name "*.cpp" -o -name "*.java"  -prune >cscope.files
+    find $srcdir -name "*.h" -o -name "*.c" -o -name "*.h" -o -name "*.s" -o -name "*.cpp" -o -name "*.java" -o -name "*.dts" -o -name "*.dtsi" -prune >cscope.files
     cscope -bkq -i cscope.files
 
     ctags -R --c++-kinds=+p --fields=+iaS --extra=+q -L cscope.files

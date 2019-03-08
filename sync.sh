@@ -23,3 +23,5 @@ repo sync -d -c -j4 2>&1 | tee sync.log
 #while true;do cat /proc/kmsg>>/data/kernel.log;done
 #find ./ -regextype posix-extended -regex ".*\.(log|txt)"
 #"a,b,c,d" |sed 's/,/\n/g'|sed '2N;s/\n//'
+#sed -i  's/^[ \t]*[0-9]*[ \t]*//g'
+#smbclient //10.0.1.110/hudson -U spreadtrum\\he.yang%Yh87@sprdj

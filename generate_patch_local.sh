@@ -13,37 +13,37 @@ echo " 4. commitb：要生成patch的新版本的commit值    "
 
 #workspace="/home/summerduan/repo/gitrepo/mypatch" #生成的patch文件存放的路径，比如:/home/apuser/repo/patch
 echo "please input your patch path.like:/home/summerduan/repo/patch"
-#read workspace
-workspace=/home2/he.yang/tmp
+read workspace
+#workspace=/home2/he.yang/tmp
 if [ -z "$workspace" ]; then
   workspace="$(pwd)/patch"
   echo "default workspace:$workspace"
 fi
-#echo "please input repopath.like:/home/summerduan/repo/sprdroid4.4_3.10/frameworks/base"
-#read repo
-#while [ -z "$repo" ]; do
-  #echo "repo path can not be empty."
-  #echo "please input repopath again."
-  #read repo
-#done
-#echo "please input one commit or tag.like:40sha1,or MOCORDROID4.1_3.4_TSHARK_13B_W14.04.4"
-#read commita
-#while [ -z "$commita" ]; do
-# echo "commit can not be empty."
-# echo "please input commit again."
-# read commita
-#done
-#echo "please input another commit or tag."
-#read commitb
-#while [ -z "$commitb" ]; do
-#  echo "commit can not be empty."
-#  echo "please input commit again."
-#  read commitb
-#done
+echo "please input repopath.like:/home/summerduan/repo/sprdroid4.4_3.10/frameworks/base"
+read repo
+while [ -z "$repo" ]; do
+  echo "repo path can not be empty."
+  echo "please input repopath again."
+  read repo
+done
+echo "please input one commit or tag.like:40sha1,or MOCORDROID4.1_3.4_TSHARK_13B_W14.04.4"
+read commita
+while [ -z "$commita" ]; do
+ echo "commit can not be empty."
+ echo "please input commit again."
+ read commita
+done
+echo "please input another commit or tag."
+read commitb
+while [ -z "$commitb" ]; do
+  echo "commit can not be empty."
+  echo "please input commit again."
+  read commitb
+done
 
-repo=`pwd`
-commita="HEAD~1"
-commitb=HEAD
+#repo=`pwd`
+#commita="HEAD~1"
+#commitb=HEAD
 patchfolder=$(date '+%Y%m%d%H%M%S')
 workspace="$workspace/$patchfolder"
 if [ ! -d $workspace ]; then
