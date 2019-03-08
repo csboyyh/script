@@ -92,7 +92,7 @@ function get_idh_info
         p_project=$2
     fi
     eval `grep $p_project $manifest_repo/$1_manifest.xml |awk -F"=| " '{print "idh_revision="$7";idh_group="$9";idh_branch="$11}'`
-    echo -e "idh info:\n\tidh_revision=$idh_revision\n\tidh_group=$idh_group\n\tidh_branch=$idh_branch"
+    echo -e "idh info:\n\tidh_branch=$idh_branch\n\tidh_revision=$idh_revision\n\tidh_group=$idh_group"
     if [ "$idh_branch"x = x ];then
         echo "Not found $p_project in IDH release manifest"
         return
@@ -128,16 +128,19 @@ function merge_gerrit_base_idh
     mkdir -p $work_dir/$idh_branch
 
     cd $work_dir/$idh_branch
-    
-    repo init -u $repo_info -b $idh_branch
-    repo sync -J24 -c $p_project
+    echo "Start to fetch $idh_branch code"
+    repo init -u $repo_info -b $idh_branch -q
+    repo sync -J24 -c $p_project --force-sync -q
+    echo "Sync done"
 
     if [ $force_patch = "true" ];then
         mkdir -p $work_dir/$p_branch
     
         cd $work_dir/$p_branch
-        repo init -u $repo_info -b $p_branch
-        repo sync -J24 -c $p_project
+        echo "Start to fetch $p_branch code"
+        repo init -u $repo_info -b $p_branch -q
+        repo sync -J24 -c $p_project --force-sync -q
+        echo "Sync done"
 
         cd $p_project
         handle_gerrit
@@ -158,7 +161,7 @@ function merge_gerrit_base_idh
     cd $work_dir/$idh_branch/$p_project
     
     handle_gerrit
-    commit_list="since_$2_to_gerrit($1)_commit.list"
+    commit_list="since_$2_to_gerrit_$1_commit.list"
     git log "$idh_revision..$p_revision" --reverse |grep "^commit">$work_dir/$commit_list
     
     if echo $idh_group | grep "idh" ;then
@@ -212,24 +215,60 @@ function merge_gerrit_base_idh
     fi
     count=`cat $work_dir/$commit_list |wc -l`
     if [ $count -gt 1 ];then
-        echo "here are the commits between idh and gerrit,please confirm if your
-                 gerrit depend on it,if yes,input \"y\",if no input \"n\",or \"more\" for 
-                 detail info check(equal to git show $commit)"
-        git checkout $idh_revision
+        echo -e "There are $count commits between idh and gerrit,please confirm if your"
+        echo -e "\tgerrit depend on it,if yes,input \"y\",if no input \"n\",or \"more\" for" 
+        echo -e " \tdetail info check(equal to git show <commit>)"
+        sleep 2
+        git reset --hard  $idh_revision>/dev/null
 
         for commit in `cat $work_dir/$commit_list|awk '{print $2}'`
         do
             git show $commit --name-status
             while true ;
             do
-                echo -e "Dose your gerrit depend on it:(y/n/more)"
-                read option
+                if [ "$commit" != "$p_revision" ];then
+                    echo -e "Dose your gerrit depend on it:(y/n/more)"
+                    read option
+                else
+                    option="y"
+                fi
+
                 if [ $option = "n" ];then
                     sed -i "/$commit/d" $work_dir/$commit_list
                     break
                 elif [ $option = "y" ];then
-                    echo "Collect this commit:"$commit
-                    git merge $commit
+                    echo "Prepare to collect this commit:"$commit
+                    if ! git cherry-pick $commit >/dev/null;then
+                        eval `git status -s | awk '{print "emode="$1";efile="$2";"}'`
+                        case $emode in
+                            "UU")
+                            if ! grep "<<<<<<<|>>>>>>>" $efile ;then
+                                echo "Auto fix conflicts,commit directly"
+                                git add --all
+                                git commit --no-edit
+                                break
+                            fi
+                                ;;
+                        esac
+                        while true 
+                        do
+                            echo -e "Pick commit($commit) fail,fix merge conflicts mannually"
+                            echo -e "\tcode location:$work_dir/$idh_branch/$p_project"
+                            echo -e "\tafter fix,use git add ;git commit then come back"
+                            echo "Have you fixed cherry-pick conflicts?\"y\" or \"n\""
+                            read option
+                            if [ "$option"x = "y"x ];then
+                                break
+                            else
+                                echo "please continue to fix between <<< ===are elder version"
+                                 "==== <<<< are newer version,merge them mannually"
+                                continue
+                            fi
+                        done
+                    else
+                        echo "Collect $commit successfully"
+                        sleep 1
+                    fi
                     break
                 elif [ $option = "more" ];then
                     git show $commit
@@ -240,42 +279,62 @@ function merge_gerrit_base_idh
             fi
             done
         done
-        create_patch 
+        patch_location=$(create_patch)
     elif [ $count -eq 1 ];then
-        create_patch
+        git reset --hard $p_revision
+        patch_location=$(create_patch)
     else
         echo "invalid case,there is no commit between $p_revision and $idh_revision"
         return
     fi
     
-    echo "please confirm if there is dependency on other repo's submit"
-    echo "if there is,input depended gerrit ID,or input \"none\" if there is not"
+    echo -e "Please confirm if there is dependent commit in other repos"
+    echo -e "\tif there is,input depended gerrit ID,or any else if there is not"
     read option
-    if [ $option != "none"];then
+    if [ `echo "$option" | egrep "[a-f0-9]{8,40}" ` ];then
         patch_release $option $2
+    else
+        echo "Create patch successully locates:"$patch_location
     fi
 }
 function create_patch
 {
-    cd $work_dir/
-    patch_dir="output/"$idh_branch"_$(date +%Y%m%d%H%m)"
+    patch_dir=$work_dir/output/$(date +%Y%m%d%H%M)_$idh_branch
     mkdir -p $patch_dir/new/$p_project
     mkdir -p $patch_dir/old/$p_project
 
-    project=`cat $p_project | sed 's/\\/./g'`
+    project=`echo $p_project | sed 's/\//./g'`
     
-    git diff $idh_revision HEAD >$work_dir/$patch_dir/output/$project".patch"
+    cd $work_dir/$idh_branch/$p_project
 
-    for file in `git diff $idh_revision HEAD --name-status |awk '{print $1}'`
+    git diff $idh_revision HEAD >$patch_dir/$project".patch"
+    git log $idh_revision..HEAD >$patch_dir/commit-msg.txt
+
+    head=`git log |grep "^commit"|awk '{print $2}'|head -n 1`
+    
+    git reset --hard $idh_revision>/dev/null
+    for line in `git diff $idh_revision $head --name-status |awk '/^[AMD]\s/{print "opm="$1";file="$2";"}'`
     do
+        eval `echo $line`
         dir_name=$(dirname $file)
-        base_name=$(basename $file)
-        mkdir -p $patch_dir/new/$dir_name
-        mkdir -p $patch_dir/old/$dir_name
-        cp $file $patch_dir/new/$dir_name
-        git checkout $idh_revison $file
-        cp $file $patch_dir/old/$dir_name
+        if [ $opm = "M" -o $opm = "D" ];then 
+           mkdir -p $patch_dir/old/$p_project/$dir_name
+           cp $file $patch_dir/old/$p_project/$dir_name
+        fi
     done
+    git reset --hard $head>/dev/null
+    for line in `git diff $idh_revision $head --name-status |awk '/^[AMD]\s/{print "opm="$1";file="$2";"}'`
+    do
+        eval `echo $line`
+        dir_name=$(dirname $file)
+        if [ $opm = "M" -o $opm = "A" ];then 
+           mkdir -p $patch_dir/new/$p_project/$dir_name
+           cp $file $patch_dir/new/$p_project/$dir_name
+        fi
+    done
+    cd $patch_dir
+    tar -czf $project.tar.gz *
+    echo $patch_dir
 }
 
 function script_usage
@@ -285,6 +344,7 @@ function script_usage
 
 function patch_release
 {
+    cur_pos=$(pwd)
     if [ $# -lt 2 ];then
         script_usage
     fi
@@ -292,6 +352,7 @@ function patch_release
     get_gerrit_info $1
     get_idh_info $2
     merge_gerrit_base_idh $1 $2
+    cd $cur_pos
 }
 
 function patch_prepare
