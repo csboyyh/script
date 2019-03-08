@@ -30,7 +30,8 @@ cherry_fetch="git cherry-pick FETCH_HEAD"
 who="he.yang"
 pswd="Yh87@sprdj" #password
 suser="$domain\\$who%$pswd"
-
+idh_pattern="W([0-9]{2}\.){2}[0-9](_P[0-9])?$"
+gerrit_pattern="^[0-9]{6,7}$"
 #################################
 
 #########
@@ -41,7 +42,9 @@ suser="$domain\\$who%$pswd"
 
 function get_gerrit_info
 {
-    eval `ssh -p 29418 "$who$gurl" "$gq$1 $patch_set"|sed 's/\s//g' |awk -F ":" ' 
+        unset src_branch src_project src_revision src_ref src_status
+        unset dest_branch dest_project dest_revision dest_ref dest_status dest_group
+    eval `ssh -p 29418 "$who$gurl" "$gq$1 $patch_set"|sed 's/\s//g' |awk -F ":" -v src=$2 ' 
         BEGIN{branch="";project="";revision="";ref="";status="new"}
         {
             if($1=="branch"){
@@ -60,15 +63,36 @@ function get_gerrit_info
                 status=$2
             }
         }
-        END{print "p_branch="branch";p_project="project";p_revision="revision";p_ref="ref";p_status="status}'` 
-    echo -e "gerrit info\n \tbranch:"$p_branch"\n\tproject:"$p_project"\n\trevision:"$p_revision"\n\tref:"$p_ref"\n\tstatus:"$p_status 
-    export p_branch p_project p_revision p_ref p_status
+        END{
+            if(src==1){
+                print "src_branch="branch";src_project="project";src_revision="revision";src_ref="ref";src_status="status
+            }
+            else{
+                print "dest_branch="branch";dest_project="project";dest_revision="revision";dest_ref="ref";dest_status="status
+            }
+        }'` 
+    if [ $2 -eq 1 ];then
+        echo -e "gerrit src info\n \tbranch:"$src_branch"\n\tproject:"$src_project"\n\trevision:"$src_revision"\n\tref:"$src_ref"\n\tstatus:"$src_status 
+        export src_branch src_project src_revision src_ref src_status
+    else
+        echo -e "gerrit dest info\n \tbranch:"$dest_branch"\n\tproject:"$dest_project"\n\trevision:"$dest_revision"\n\tref:"$dest_ref"\n\tstatus:"$dest_status 
+        dest_group="sprd"
+        export dest_branch dest_project dest_revision dest_ref dest_status dest_group
+    fi
 }
 
 function get_idh_info
 {
+    unset dest_branch dest_project dest_revision dest_ref dest_status
+    if [ `echo $1 |egrep $gerrit_pattern` ];then
+        get_gerrit_info $1 0
+        return
+    fi
+    if [ ! `echo $1 | egrep $idh_pattern` ];then
+        echo "illegal idh version"
+        return
+    fi
     patch_prepare
-    unset idh_revision idh_group idh_branch
     if [ ! -f $manifest_repo/$1_manifest.xml ];then
         if [ ! -f $work_dir/$idh_list ];then
             smbclient -c "recurse;ls" $hds -U $suser >$work_dir/$idh_list
@@ -88,16 +112,19 @@ function get_idh_info
         sed -i 's/\/$//g' $manifest_repo/$1_manifest.xml
     fi
 
-    if [ -z "$p_project" ];then
-        p_project=$2
+    if [ -z "$src_project" ];then
+        dest_project=$2
+    else
+        dest_project=$src_project
     fi
-    eval `grep $p_project $manifest_repo/$1_manifest.xml |awk -F"=| " '{print "idh_revision="$7";idh_group="$9";idh_branch="$11}'`
-    echo -e "idh info:\n\tidh_branch=$idh_branch\n\tidh_revision=$idh_revision\n\tidh_group=$idh_group"
-    if [ "$idh_branch"x = x ];then
-        echo "Not found $p_project in IDH release manifest"
+    eval `grep $dest_project $manifest_repo/$1_manifest.xml |awk -F"=| " '{print "dest_revision="$7";dest_group="$9";dest_branch="$11}'`
+    echo -e "dest(idh) info:\n\tdest_branch=$dest_branch\n\tdest_revision=$dest_revision\n\tdest_group=$dest_group"
+    if [ "$dest_branch"x = x ];then
+        echo "Not found $src_project in IDH release manifest"
         return
     fi
-    export idh_revision idh_group idh_branch
+    dest_ref="none"
+    export dest_revision dest_group dest_branch dest_project dest_ref
 }
 
 function cherry_pick
@@ -119,7 +146,7 @@ function cherry_pick
        while true 
        do
            echo -e "Pick commit($1) fail,fix merge conflicts mannually"
-           echo -e "\tcode location:$work_dir/$idh_branch/$p_project"
+           echo -e "\tcode location:$work_dir/$dest_branch/$dest_project"
            echo -e "\tafter fix,use git add ;git commit then come back"
            echo "Have you fixed cherry-pick conflicts?\"y\" or \"n\""
            read option
@@ -134,37 +161,48 @@ function cherry_pick
     fi
     echo "cherry-pick commit($1)successfully"
     sleep 1
-
 }
 function pick_gerrit
 {
-    local tmp_revision=$p_revision
-    local need_cherry="false"
-    if [ $p_status != "MERGED" ];then
-        eval `echo "$fetch_cmd$p_branch $p_ref"`
-        tmp_revision="FETCH_HEAD"
-        need_cherry="true"
-    fi
-    if [ $1 = "true" -o $need_cherry = "true" ];then
-        git reset --hard $idh_revision>/dev/null
-        cherry_pick $tmp_revision
-        p_revision=`git log |grep "^commit"|awk '{print $2}'|head -n 1`
-        p_status="MERGED"
+    if [ $1 = "dest" -a "$dest_ref"x != "none"x ];then
+        if [ $dest_status != "MERGED" ];then
+            eval `echo "$fetch_cmd$dest_branch $dest_ref"`
+            cherry_pick "FETCH_HEAD"
+            dest_revision=`git log |grep "^commit"|awk '{print $2}'|head -n 1`
+            dest_status="MERGED"
+        fi
+    elif [ $1 = "src" ];then
+        if [ $src_status != "MERGED" ];then
+            git reset --hard $dest_revision>/dev/null
+            eval `echo "$fetch_cmd$src_branch $src_ref"`
+            cherry_pick "FETCH_HEAD"
+            src_revision=`git log |grep "^commit"|awk '{print $2}'|head -n 1`
+            src_status="MERGED"
+        elif [ $2 = "true" ];then
+            git reset --hard $dest_revision>/dev/null
+            cherry_pick $src_revision
+            src_revision=`git log |grep "^commit"|awk '{print $2}'|head -n 1`
+        fi
     fi
 }
 
 function merge_gerrit_base_idh
 {
     local force_patch="false"
-    if [ "$idh_branch"x != "$p_branch"x ];then
-        echo "different branch gerrit($p_branch),idh($idh_branch)"
-        if [ "$idh_branch"x != x ] ;then
+    if [ "$dest_project"x != "$src_project"x ];then
+        echo "different project src:$src_project dest:$dest_project"
+        echo "stop directly"
+        return
+    fi
+    if [ "$dest_branch"x != "$src_branch"x ];then
+        echo "different branch src($src_branch),dest($dest_branch)"
+        if [ "$dest_branch"x != x ] ;then
             echo "do you want to force to create patch(input \"y\" or \"n\")"
             read option
             if [ "$option"x = "y"x ];then
                 force_patch="true"
             else
-                "stop create patch"
+                "stop creating patch"
                 return
             fi
         else
@@ -172,32 +210,34 @@ function merge_gerrit_base_idh
         fi
     fi
 
-    mkdir -p $work_dir/$idh_branch
+    mkdir -p $work_dir/$dest_branch
 
-    cd $work_dir/$idh_branch
-    echo "Start to fetch $idh_branch code"
-    repo init -u $repo_info -b $idh_branch -q
-    repo sync -J24 -c $p_project --force-sync -q
+    cd $work_dir/$dest_branch
+    echo "Start to fetch $dest_branch code"
+    repo init -u $repo_info -b $dest_branch -q
+    repo sync -J24 -c $dest_project --force-sync -q
     echo "Sync done"
 
-    cd $work_dir/$idh_branch/$p_project
+    cd $work_dir/$dest_branch/$dest_project
+    
+    pick_gerrit "dest" $force_patch
     
     if [ $force_patch = "true" ];then
     
-        echo "Start to fetch $p_branch code"
-        git fetch korg $p_branch
+        echo "Start to fetch $src_branch code"
+        git fetch korg $src_branch
         echo "Sync done"
     fi
     
-    pick_gerrit $force_patch
+    pick_gerrit "src" $force_patch
     commit_list="since_$2_to_gerrit_$1_commit.list"
-    git log "$idh_revision..$p_revision" --reverse |grep "^commit">$work_dir/$commit_list
+    git log "$dest_revision..$src_revision" --reverse |grep "^commit">$work_dir/$commit_list
     
-    if echo $idh_group | grep "idh" ;then
+    if echo $dest_group | grep "idh" ;then
         bin_names=""
         files=""
         echo -e "This gerrit was released by binary files in IDH\n"
-        for mfile in `git show $p_revision --name-status | awk '/^[AMD]\s/{print $2}'`
+        for mfile in `git show $src_revision --name-status | awk '/^[AMD]\s/{print $2}'`
         do
             echo "modified file:"$mfile
             file=$(basename $mfile)
@@ -244,18 +284,18 @@ function merge_gerrit_base_idh
     fi
     count=`cat $work_dir/$commit_list |wc -l`
     if [ $count -gt 1 ];then
-        echo -e "There are $count commits between idh and gerrit,please confirm if your"
+        echo -e "There are $count commits between src and dest,please confirm if your"
         echo -e "\tgerrit depend on it,if yes,input \"y\",if no input \"n\",or \"more\" for" 
         echo -e " \tdetail info check(equal to git show <commit>)"
         sleep 2
-        git reset --hard  $idh_revision>/dev/null
+        git reset --hard  $dest_revision>/dev/null
 
         for commit in `cat $work_dir/$commit_list|awk '{print $2}'`
         do
             git show $commit --name-status
             while true ;
             do
-                if [ "$commit" != "$p_revision" ];then
+                if [ "$commit" != "$src_revision" ];then
                     echo -e "Dose your gerrit depend on it:(y/n/more)"
                     read option
                 else
@@ -280,10 +320,9 @@ function merge_gerrit_base_idh
         done
         patch_location=$(create_patch)
     elif [ $count -eq 1 ];then
-        git reset --hard $p_revision
         patch_location=$(create_patch)
     else
-        echo "invalid case,there is no commit between $p_revision and $idh_revision"
+        echo "invalid case,there is no commit between $src_revision and $dest_revision"
         return
     fi
     
@@ -298,37 +337,37 @@ function merge_gerrit_base_idh
 }
 function create_patch
 {
-    patch_dir=$work_dir/output/$(date +%Y%m%d%H%M)_$idh_branch
-    mkdir -p $patch_dir/new/$p_project
-    mkdir -p $patch_dir/old/$p_project
+    patch_dir=$work_dir/output/$(date +%Y%m%d%H%M)_$dest_branch
+    mkdir -p $patch_dir/new/$dest_project
+    mkdir -p $patch_dir/old/$dest_project
 
-    project=`echo $p_project | sed 's/\//./g'`
+    project=`echo $dest_project | sed 's/\//./g'`
     
-    cd $work_dir/$idh_branch/$p_project
+    cd $work_dir/$dest_branch/$dest_project
 
-    git diff $idh_revision HEAD >$patch_dir/$project".patch"
-    git log $idh_revision..HEAD >$patch_dir/commit-msg.txt
+    git diff $dest_revision HEAD >$patch_dir/$project".patch"
+    git log $dest_revision..HEAD >$patch_dir/commit-msg.txt
 
     head=`git log |grep "^commit"|awk '{print $2}'|head -n 1`
     
-    git reset --hard $idh_revision>/dev/null
-    for line in `git diff $idh_revision $head --name-status |awk '/^[AMD]\s/{print "opm="$1";file="$2";"}'`
+    git reset --hard $dest_revision>/dev/null
+    for line in `git diff $dest_revision $head --name-status |awk '/^[AMD]\s/{print "opm="$1";file="$2";"}'`
     do
         eval `echo $line`
         dir_name=$(dirname $file)
         if [ $opm = "M" -o $opm = "D" ];then 
-           mkdir -p $patch_dir/old/$p_project/$dir_name
-           cp $file $patch_dir/old/$p_project/$dir_name
+           mkdir -p $patch_dir/old/$src_project/$dir_name
+           cp $file $patch_dir/old/$src_project/$dir_name
         fi
     done
     git reset --hard $head>/dev/null
-    for line in `git diff $idh_revision $head --name-status |awk '/^[AMD]\s/{print "opm="$1";file="$2";"}'`
+    for line in `git diff $dest_revision $head --name-status |awk '/^[AMD]\s/{print "opm="$1";file="$2";"}'`
     do
         eval `echo $line`
         dir_name=$(dirname $file)
         if [ $opm = "M" -o $opm = "A" ];then 
-           mkdir -p $patch_dir/new/$p_project/$dir_name
-           cp $file $patch_dir/new/$p_project/$dir_name
+           mkdir -p $patch_dir/new/$src_project/$dir_name
+           cp $file $patch_dir/new/$src_project/$dir_name
         fi
     done
     cd $patch_dir
@@ -348,7 +387,7 @@ function patch_release
         script_usage
     fi
     patch_prepare
-    get_gerrit_info $1
+    get_gerrit_info $1 1
     get_idh_info $2
     merge_gerrit_base_idh $1 $2
     cd $cur_pos
