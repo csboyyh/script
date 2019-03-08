@@ -99,16 +99,63 @@ function get_idh_info
     fi
     export idh_revision idh_group idh_branch
 }
-function handle_gerrit
+
+function cherry_pick
 {
-    if [ $p_status != "MERGED" ];then
-        eval `echo "$fetch_cmd$p_branch $p_ref && $cherry_fetch"`
+    if ! git cherry-pick $1 >/dev/null;then
+       eval `git status -s | awk '{print "emode="$1";efile="$2";"}'`
+       case $emode in
+           "UU")
+           if ! egrep "<<<<<<<|>>>>>>>" $efile ;then
+               echo "Auto fix conflicts,commit directly"
+               git add --all
+               git commit --no-edit
+               echo "cherry-pick commit($1)successfully"
+               sleep 1
+               return
+           fi
+               ;;
+       esac
+       while true 
+       do
+           echo -e "Pick commit($1) fail,fix merge conflicts mannually"
+           echo -e "\tcode location:$work_dir/$idh_branch/$p_project"
+           echo -e "\tafter fix,use git add ;git commit then come back"
+           echo "Have you fixed cherry-pick conflicts?\"y\" or \"n\""
+           read option
+           if [ "$option"x = "y"x ];then
+               break
+           else
+               echo "please continue to fix between <<< ===are elder version"
+                "==== <<<< are newer version,merge them mannually"
+               continue
+           fi
+       done
     fi
-    
+    echo "cherry-pick commit($1)successfully"
+    sleep 1
+
 }
+function pick_gerrit
+{
+    local tmp_revision=$p_revision
+    local need_cherry="false"
+    if [ $p_status != "MERGED" ];then
+        eval `echo "$fetch_cmd$p_branch $p_ref"`
+        tmp_revision="FETCH_HEAD"
+        need_cherry="true"
+    fi
+    if [ $1 = "true" -o $need_cherry = "true" ];then
+        git reset --hard $idh_revision>/dev/null
+        cherry_pick $tmp_revision
+        p_revision=`git log |grep "^commit"|awk '{print $2}'|head -n 1`
+        p_status="MERGED"
+    fi
+}
+
 function merge_gerrit_base_idh
 {
-    force_patch="false"
+    local force_patch="false"
     if [ "$idh_branch"x != "$p_branch"x ];then
         echo "different branch gerrit($p_branch),idh($idh_branch)"
         if [ "$idh_branch"x != x ] ;then
@@ -133,34 +180,16 @@ function merge_gerrit_base_idh
     repo sync -J24 -c $p_project --force-sync -q
     echo "Sync done"
 
-    if [ $force_patch = "true" ];then
-        mkdir -p $work_dir/$p_branch
-    
-        cd $work_dir/$p_branch
-        echo "Start to fetch $p_branch code"
-        repo init -u $repo_info -b $p_branch -q
-        repo sync -J24 -c $p_project --force-sync -q
-        echo "Sync done"
-
-        cd $p_project
-        handle_gerrit
-        git checkout $p_revision
-        git show $p_revision > $work_dir/$p_revision.diff
-        sed '/^[ \t]*Bug/,/^[ \t]Change-Id/-2/p' $work_dir/$p_revision.diff -n >$work_dir/$p_revision.txt
-        cd $work_dir/$idh_branch
-        if [ ! git apply --reject $work_dir/$p_revision.diff ];then
-            echo " git apply patch failed,please update it mannually"
-        else
-            git add --all
-            git commit -F $work_dir/$p_revision.txt
-            p_revision=`git show HEAD --name-only | awk '/^commit/{print $2}'`
-        fi
-        
-    fi
-    
     cd $work_dir/$idh_branch/$p_project
     
-    handle_gerrit
+    if [ $force_patch = "true" ];then
+    
+        echo "Start to fetch $p_branch code"
+        git fetch korg $p_branch
+        echo "Sync done"
+    fi
+    
+    pick_gerrit $force_patch
     commit_list="since_$2_to_gerrit_$1_commit.list"
     git log "$idh_revision..$p_revision" --reverse |grep "^commit">$work_dir/$commit_list
     
@@ -238,37 +267,7 @@ function merge_gerrit_base_idh
                     break
                 elif [ $option = "y" ];then
                     echo "Prepare to collect this commit:"$commit
-                    if ! git cherry-pick $commit >/dev/null;then
-                        eval `git status -s | awk '{print "emode="$1";efile="$2";"}'`
-                        case $emode in
-                            "UU")
-                            if ! grep "<<<<<<<|>>>>>>>" $efile ;then
-                                echo "Auto fix conflicts,commit directly"
-                                git add --all
-                                git commit --no-edit
-                                break
-                            fi
-                                ;;
-                        esac
-                        while true 
-                        do
-                            echo -e "Pick commit($commit) fail,fix merge conflicts mannually"
-                            echo -e "\tcode location:$work_dir/$idh_branch/$p_project"
-                            echo -e "\tafter fix,use git add ;git commit then come back"
-                            echo "Have you fixed cherry-pick conflicts?\"y\" or \"n\""
-                            read option
-                            if [ "$option"x = "y"x ];then
-                                break
-                            else
-                                echo "please continue to fix between <<< ===are elder version"
-                                 "==== <<<< are newer version,merge them mannually"
-                                continue
-                            fi
-                        done
-                    else
-                        echo "Collect $commit successfully"
-                        sleep 1
-                    fi
+                    cherry_pick $commit
                     break
                 elif [ $option = "more" ];then
                     git show $commit
