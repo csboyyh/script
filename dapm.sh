@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DEBUG="false"
+DEBUG="true"
 
 temp_dir=dapm
 widget_db=$temp_dir/widget.txt
@@ -98,9 +98,9 @@ function build_dapm_struct
                     sed "/^$filename:.*/s/$/:$state/g" -i $widget_db
                     
                     if [ $endpoint -eq 1 ];then
-                        if [ $stream = "stream" ];then
+                        if [ "$stream"x = "stream"x ];then
                             sed "/^$filename:.*/s/$/:$stream/g" -i $widget_db
-                        elif [ $is_supply = "true" ];then
+                        elif [ "$is_supply"x = "true"x ];then
                             sed "/^$filename:.*/s/$/:supply/g" -i $widget_db
                         fi
                     fi
@@ -108,7 +108,7 @@ function build_dapm_struct
                 #Analog-Power: On  in 0 out 0
                 filename=${array[0]}
                 state=${array[1]}
-                if [ $state = "On" -a ${array[3]} -eq 0 -a ${array[5]} -eq 0 ];then
+                if [ "$state"x = "On"x -a ${array[3]} -eq 0 -a ${array[5]} -eq 0 ];then
                     is_supply="true"
                 else
                     is_supply="false"
