@@ -25,3 +25,5 @@ repo sync -d -c -j4 2>&1 | tee sync.log
 #"a,b,c,d" |sed 's/,/\n/g'|sed '2N;s/\n//'
 #sed -i  's/^[ \t]*[0-9]*[ \t]*//g'
 #smbclient //10.0.1.110/hudson -U spreadtrum\\he.yang%Yh87@sprdj
+#repo forall --group=idh,idhdel -c 'echo $REPO_RREV'
+# array=(${line//:/ })
