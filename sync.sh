@@ -27,3 +27,6 @@ repo sync -d -c -j4 2>&1 | tee sync.log
 #smbclient //10.0.1.110/hudson -U spreadtrum\\he.yang%Yh87@sprdj
 #repo forall --group=idh,idhdel -c 'echo $REPO_RREV'
 # array=(${line//:/ })
+#watch -d du xxx -s
+#time ls
+#grep "pcm end" 0-main-00-07-03.txt |awk 'BEGINE{last=0;}{diff=$2-last;print diff;last=$2}'|sort |uniq -c

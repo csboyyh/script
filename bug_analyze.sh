@@ -14,7 +14,7 @@ do
     sed "$num N;s/\n//g" -i $1
 done
 
-if [ $2 == "audio" ]
+if [ $2"x" == "audiox" ]
 then
     team_member=${audio_team[@]}
 else
@@ -34,7 +34,7 @@ do
     awk -v owner=$i '
          BEGIN{sum=0;IGNORECASE=1;FS="\t"}
          {if($6==owner){product[$3]=$3;count[$3]++;sum++}}
-         END{for(x in product){print "product:"x,"=" count[x],"pct:"count[x]/sum*100"%","of sum",sum}}' $1
+         END{for(x in product){print "product:"x"=" count[x],"pct:"count[x]/sum*100"%","of sum",sum}}' $1
     echo "statics done"
 done
 

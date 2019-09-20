@@ -55,7 +55,7 @@ function sh_sync
         cd $dest_dir
         repo init -u gitadmin@gitmirror.spreadtrum.com:android/platform/manifest.git -b $1
         repo sync -J32 -d -c
-        sh_tags $dest_dir
+        #sh_tags $dest_dir
     fi
 }
 function sh_tags
