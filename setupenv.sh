@@ -49,12 +49,20 @@ function sh_sync
 {
     dest_dir=~/project/$1
     if [ -d $1 ];then
-        repo sync -J32 -d -c $1
+        cd $dest_dir
+        repo sync -c -d -q -j24
     else
         mkdir -p $dest_dir
         cd $dest_dir
-        repo init -u gitadmin@gitmirror.spreadtrum.com:android/platform/manifest.git -b $1
-        repo sync -J32 -d -c
+        if [[ $1 =~ "roid10"|"roidq" ]];then
+            echo "Above q,use platform repo"
+            repo_name="platform/manifest.git"
+        else
+            echo "Under q,use android/platform repo"
+            repo_name="android/platform/manifest.git"
+        fi
+        repo init -u ssh://gitadmin@gitmirror.spreadtrum.com/$repo_name -b $1
+        repo sync -c -d -q -j24
         #sh_tags $dest_dir
     fi
 }
