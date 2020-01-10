@@ -47,6 +47,12 @@ function sh_get_gerrit_info
 }
 function sh_sync
 {
+    if [ $1'x' = "x" ];then
+        echo "clone manifest repo"
+        cd ~/project/manifest_repo
+        git clone ssh://gitadmin@gitmirror.spreadtrum.com/platform/manifest.git
+        return
+    fi
     dest_dir=~/project/$1
     if [ -d $1 ];then
         cd $dest_dir
@@ -57,17 +63,24 @@ function sh_sync
         if [[ $1 =~ "roid10"|"roidq" ]];then
             echo "Above q,use platform repo"
             repo_name="platform/manifest.git"
+        elif [[ $1 =~ "unc" ]];then
+            echo "Ycoto use yocto/oe-rpb-manifest"
+            repo_name="yocto/oe-rpb-manifest"
         else
             echo "Under q,use android/platform repo"
             repo_name="android/platform/manifest.git"
         fi
-        repo init -u ssh://gitadmin@gitmirror.spreadtrum.com/$repo_name -b $1
-        repo sync -c -d -q -j24
-        #sh_tags $dest_dir
+        time repo init -u ssh://gitadmin@gitmirror.spreadtrum.com/$repo_name -b $1
+        time repo sync -c -d -q -j24
+        echo "Sync done "
+        if [ $2'x' != "x" ];then
+            sh_tags $dest_dir
+        fi
     fi
 }
 function sh_tags
 {
+    echo "Prepare to build ctags under $1"
     cd $1
     srcdir=`ls`
 
