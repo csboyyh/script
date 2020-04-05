@@ -1,0 +1,48 @@
+apt install dpk-dev
+apt install uniq
+apt install zlib1g-dev
+apt search libgz
+apt search libz
+apt search linux-source
+apt search uniq
+apt search zlib
+apt serch linux-source
+apt source git
+apt source linux-source
+cd ~/bootup/git-2.17.0/
+cd git-2.17.0/
+cd include/
+cd /usr/
+./configure 
+find . -name "zlib.h"
+find /usr -name "zlib.h"
+git 
+git --version
+make
+make install
+mkdir bootup
+sed
+sudo apt build-dep dpkg-dev
+sudo apt-get build-dep git
+sudo apt-get install build-essential #this one very important
+
+sudo apt-get install git
+sudo apt-get install python
+sudo apt install 
+sudo apt install aptitude
+sudo apt install build-essential
+sudo apt install dpk-dev
+sudo apt install dpkg-dev
+sudo apt install libcurl4-gnutls-dev libexpat1-dev python dh-apache2 asciidoc
+sudo apt install uniq
+sudo apt install vim
+sudo apt install vim-common=2:8.0.1453-1ubuntu1
+sudo apt install zlib1g-dev
+sudo aptitude  install build-essential
+sudo aptitude install dpkg-dev
+sudo aptitude install python
+sudo apt update
+sudo apt update -y
+sudo make install
+vim bootup.sh
+vim history.txt 
